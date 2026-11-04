@@ -1,54 +1,126 @@
-# Distributed Transactions Lab
+## Aviso Importante
 
-Laboratório Python/FastAPI para estudar consistência entre PostgreSQL e MongoDB.
+Por se tratar de um pojeto academico simples o .env não foi ocultado
 
-## Subir
+Como executar o projeto
 
-```bash
-docker compose up --build
-```
+## Tutorial de Uso
 
-Swagger: http://localhost:8000/docs  
-Health: http://localhost:8000/health
+### 1. Iniciar o Docker
 
-## Cenário 1: PostgreSQL -> MongoDB
+Abra o Docker Desktop e aguarde até que o Docker Engine esteja em execução.
 
-POST `/api/customers/postgres-then-mongo`
+### 2. Iniciar o projeto
 
-```json
+Abra o terminal na pasta raiz do projeto (onde está o arquivo docker-compose.yml) e execute:
+
+`docker compose up --build`
+
+Aguarde a inicialização dos serviços:
+- API Python
+- PostgreSQL
+- MongoDB
+
+Observação: o terminal continuará exibindo mensagens dos containers. Isso é normal, não precisa aguardar as mensagens pararem.
+
+### 3. Acessar a API
+
+Abra o navegador no endereço:
+http://localhost:8000/docs
+
+A página apresenta os endpoints disponíveis e permite executar os testes diretamente pelo navegador.
+
+### 4. Execução dos casos de teste
+
+#### Caso 1 — Inserção PostgreSQL → MongoDB
+
+Endpoint: POST /api/customers/postgres-then-mongo
+
+Expanda o endpoint.
+Clique em Try it out.
+
+Informe os dados:
 {
-  "id": "11111111-1111-4111-8111-111111111111",
-  "name": "Ana",
-  "email": "ana@example.com"
+  "name": "Cliente Teste 1",
+  "email": "teste1@email.com"
 }
-```
 
-Falha simulada no MongoDB:
-`POST /api/customers/postgres-then-mongo?fail_at=mongo`
+Clique em Execute.
 
-## Cenário 2: MongoDB -> PostgreSQL
+Resultado esperado:
+- Inserção realizada no PostgreSQL.
+- Inserção realizada no MongoDB.
+- Transação finalizada com sucesso.
 
-POST `/api/customers/mongo-then-postgres`
+#### Caso 2 — Inserção MongoDB → PostgreSQL
 
-Falha simulada no PostgreSQL:
-`POST /api/customers/mongo-then-postgres?fail_at=postgres`
+Endpoint: POST /api/customers/mongo-then-postgres
 
-## Inspeção
+Repita o procedimento anterior, utilizando:
+{
+  "name": "Cliente Teste 2",
+  "email": "teste2@email.com"
+}
 
-- `GET /api/customers/{customer_id}/debug`
-- `GET /api/customers/transactions/{transaction_id}`
+Resultado esperado:
+- Inserção realizada no MongoDB.
+- Inserção realizada no PostgreSQL.
+- Transação finalizada com sucesso.
 
-## Limitações e próximos passos
+#### Caso 3 — Falha na inserção do MongoDB
 
-1. A implementação é Saga com transações locais e compensação, não 2PC distribuído.
-2. SQLite é um journal local para uma única instância; não serve como coordenador compartilhado em múltiplas réplicas.
-3. O recovery worker ainda não está implementado. Será necessário reconciliar o journal com os bancos após crash, inclusive no intervalo entre a gravação e a atualização do journal.
-4. Compensações são condicionadas ao `operation_id` para não apagar registros de outra operação.
-5. Esta versão usa chamadas síncronas para facilitar a leitura do fluxo.
-6. Não usar em produção sem recuperação, testes de integração, autenticação, observabilidade e revisão de segurança.
+Endpoint: POST /api/customers/postgres-then-mongo
+Expanda o endpoint e clique em Try it out.
 
-## Comparação conceitual
+Informe um novo cliente:
+{
+  "name": "Cliente Teste 3",
+  "email": "teste3@email.com"
+}
 
-PostgreSQL suporta `PREPARE TRANSACTION`, `COMMIT PREPARED` e `ROLLBACK PREPARED`.
-MongoDB possui transações ACID próprias, mas não oferece participação XA genérica equivalente para um coordenador externo.
-Assim, não há 2PC nativo entre os dois usando esses mecanismos. O laboratório demonstrará essa limitação e comparará com Saga.
+No parâmetro fail_at, informe mongo.
+Clique em Execute.
+
+Resultado esperado:
+- O cliente é inserido inicialmente no PostgreSQL.
+- A inserção no MongoDB falha propositalmente.
+- A Saga executa a compensação no PostgreSQL.
+
+O registro criado no PostgreSQL é removido.
+A API deverá retornar um erro HTTP, pois a falha foi provocada intencionalmente.
+
+#### Caso 4 — Falha na inserção do PostgreSQL
+
+Endpoint: POST /api/customers/mongo-then-postgres
+Expanda o endpoint e clique em Try it out.
+
+Informe um novo cliente:
+{
+  "name": "Cliente Teste 4",
+  "email": "teste4@email.com"
+}
+
+No parâmetro fail_at, informe postgres.
+Clique em Execute.
+
+Resultado esperado:
+- O cliente é inserido inicialmente no MongoDB.
+- A inserção no PostgreSQL falha propositalmente.
+- A Saga executa a compensação no MongoDB.
+
+O registro criado no MongoDB é removido.
+A API deverá retornar um erro HTTP, pois a falha foi provocada intencionalmente.
+
+### 5. Consultar os resultados
+
+Para verificar os resultados dos testes, utilize:
+GET /api/customers/transactions/{transaction_id}: consulta o estado da transação.
+GET /api/customers/{customer_id}/debug: consulta os dados do cliente nos dois bancos.
+
+Os identificadores são retornados nas respostas da API.
+
+### 6. Encerrar o projeto
+
+No terminal, pressione Ctrl + C e execute:
+docker compose down
+Pronto! Os containers serão encerrados e os dados persistidos nos volumes serão mantidos.
